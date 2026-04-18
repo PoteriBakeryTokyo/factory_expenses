@@ -200,13 +200,8 @@
       </div>
       <div class="form-group" id="fg-name">
         <label for="input-name">名前</label>
-        <div class="select-wrap"><select id="input-name"><option value="">読み込み中...</option></select></div>
-        <div class="error-msg" id="err-name">名前を選択してください</div>
-      </div>
-      <div class="form-group hidden" id="fg-name-other">
-        <label for="input-name-other">名前を入力</label>
-        <input type="text" id="input-name-other" placeholder="氏名を入力してください">
-        <div class="error-msg" id="err-name-other">名前を入力してください</div>
+        <input type="text" id="input-name" placeholder="氏名を入力してください">
+        <div class="error-msg" id="err-name">名前を入力してください</div>
       </div>
     </div>
 
@@ -215,7 +210,8 @@
         <label>内容</label>
         <div class="chip-group" id="chip-group">
           <button type="button" class="chip" data-value="原材料">原材料</button>
-          <button type="button" class="chip" data-value="消耗品">消耗品</button>
+          <button type="button" class="chip" data-value="消耗品（資材、備品、印刷）">消耗品（資材、備品、印刷）</button>
+          <button type="button" class="chip" data-value="車両（給油、オイル交換、修理）">車両（給油、オイル交換、修理）</button>
           <button type="button" class="chip" data-value="駐車場">駐車場</button>
           <button type="button" class="chip" data-value="その他">その他</button>
         </div>
@@ -338,40 +334,7 @@ function init() {
   const d = String(today.getDate()).padStart(2,'0');
   document.getElementById('input-date').value = `${y}-${m}-${d}`;
 
-  showLoading('名前リストを読み込み中...');
-  fetch(GAS_URL + '?action=getNames')
-    .then(r => r.json())
-    .then(data => {
-      hideLoading();
-      if (data.status === 'ok') populateNames(data.names);
-      else showNameLoadError();
-    })
-    .catch(() => { hideLoading(); showNameLoadError(); });
-
-  document.getElementById('input-name').addEventListener('change', onNameChange);
   document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', onChipClick));
-}
-
-function showNameLoadError() {
-  document.getElementById('input-name').innerHTML = '<option value="">読み込みに失敗しました</option>';
-}
-
-function populateNames(names) {
-  const sel = document.getElementById('input-name');
-  sel.innerHTML = '<option value="">選択してください</option>';
-  names.forEach(n => {
-    const opt = document.createElement('option');
-    opt.value = n; opt.textContent = n; sel.appendChild(opt);
-  });
-  const other = document.createElement('option');
-  other.value = '__other__'; other.textContent = 'その他';
-  sel.appendChild(other);
-}
-
-function onNameChange() {
-  const val = document.getElementById('input-name').value;
-  document.getElementById('fg-name-other').classList.toggle('hidden', val !== '__other__');
-  if (val !== '__other__') document.getElementById('input-name-other').value = '';
 }
 
 function onChipClick(e) {
@@ -517,10 +480,6 @@ function validate() {
   checks.forEach(([test, fg, err]) => {
     if (test()) { showError(fg, err); valid = false; } else clearError(fg, err);
   });
-  if (document.getElementById('input-name').value === '__other__') {
-    if (!document.getElementById('input-name-other').value.trim()) { showError('fg-name-other','err-name-other'); valid = false; }
-    else clearError('fg-name-other','err-name-other');
-  }
   if (selectedCategory === 'その他') {
     if (!document.getElementById('input-category-other').value.trim()) { showError('fg-category-other','err-category-other'); valid = false; }
     else clearError('fg-category-other','err-category-other');
@@ -537,8 +496,7 @@ function goToConfirm() {
     if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
-  const nameVal = document.getElementById('input-name').value;
-  const displayName = nameVal === '__other__' ? document.getElementById('input-name-other').value.trim() : nameVal;
+  const displayName = document.getElementById('input-name').value.trim();
   const catVal = selectedCategory === 'その他' ? document.getElementById('input-category-other').value.trim() : selectedCategory;
   const [y, mo, d] = document.getElementById('input-date').value.split('-');
 
@@ -557,8 +515,7 @@ function goBack() { showPage('page-input'); updateSteps(1); }
 
 // ===== 送信（配送管理APIと同方式: URLエンコードPOST） =====
 function submitForm() {
-  const nameVal = document.getElementById('input-name').value;
-  const displayName = nameVal === '__other__' ? document.getElementById('input-name-other').value.trim() : nameVal;
+  const displayName = document.getElementById('input-name').value.trim();
   const catVal = selectedCategory === 'その他' ? document.getElementById('input-category-other').value.trim() : selectedCategory;
 
   const payload = {
@@ -594,8 +551,8 @@ function submitForm() {
 
 // ===== リセット =====
 function resetForm() {
-  ['input-name-other','input-category-other','input-payment','input-amount'].forEach(id => { document.getElementById(id).value = ''; });
-  document.getElementById('fg-name-other').classList.add('hidden');
+  ['input-category-other','input-payment','input-amount'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('input-name').value = '';
   document.getElementById('fg-category-other').classList.add('hidden');
   selectedCategory = null; receiptBase64 = null; receiptMime = null;
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
