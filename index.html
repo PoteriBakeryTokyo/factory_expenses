@@ -231,12 +231,11 @@
           <select id="input-payment">
             <option value="">選択してください</option>
             <option value="現金">現金</option>
-            <option value="カード（末尾0781）">カード（末尾0781）</option>
-            <option value="カード（末尾1093）">カード（末尾1093）</option>
-            <option value="カード（末尾1584）">カード（末尾1584）</option>
-            <option value="カード（末尾1599）">カード（末尾1599）</option>
-            <option value="カード（末尾1704）">カード（末尾1704）</option>
             <option value="カード（末尾7191）">カード（末尾7191）</option>
+            <option value="カード（末尾1599）">カード（末尾1599）</option>
+            <option value="カード（末尾1584）">カード（末尾1584）</option>
+            <option value="カード（末尾1093）">カード（末尾1093）</option>
+            <option value="カード（末尾1704）">カード（末尾1704）</option>
           </select>
         </div>
         <div class="notice">※ 選択肢に無い支払方法や個人の立替の場合は、この画面からの入力ではなく社員に連絡してください。</div>
@@ -256,28 +255,17 @@
       <div class="form-group" id="fg-receipt">
         <label>レシート写真</label>
 
-        <!-- 撮影ボタン（初期表示） -->
-        <div class="receipt-area" id="receipt-area" onclick="openCamera()">
+        <div class="receipt-area" id="receipt-area" onclick="document.getElementById('receipt-input').click()">
           <span class="receipt-icon" id="receipt-icon">📷</span>
           <div class="receipt-label" id="receipt-label">タップして撮影</div>
           <div class="receipt-hint">カメラが起動します（必須）</div>
           <img class="receipt-preview" id="receipt-preview" alt="レシートプレビュー">
         </div>
-        <span class="receipt-retake" id="receipt-retake" onclick="openCamera()">📷 撮り直す</span>
+        <input type="file" id="receipt-input" accept="image/*" capture="environment" style="display:none;" onchange="handleReceiptInput(this)">
+        <span class="receipt-retake" id="receipt-retake" onclick="document.getElementById('receipt-input').click()">📷 撮り直す</span>
         <div class="error-msg" id="err-receipt">レシート写真を撮影してください</div>
       </div>
     </div>
-
-    <!-- カメラモーダル -->
-    <div id="camera-modal" style="display:none;position:fixed;inset:0;background:#000;z-index:300;flex-direction:column;">
-      <video id="camera-video" style="width:100%;height:100%;object-fit:cover;" autoplay playsinline></video>
-      <div style="position:absolute;bottom:0;left:0;right:0;padding:32px 24px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(transparent,rgba(0,0,0,0.7));">
-        <button onclick="closeCamera()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:15px;padding:12px 20px;border-radius:980px;cursor:pointer;">キャンセル</button>
-        <button onclick="capturePhoto()" style="width:70px;height:70px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.5);cursor:pointer;font-size:28px;">📷</button>
-        <button onclick="switchCamera()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:15px;padding:12px 20px;border-radius:980px;cursor:pointer;">切替</button>
-      </div>
-    </div>
-    <canvas id="camera-canvas" style="display:none;"></canvas>
 
     <button class="btn-primary" onclick="goToConfirm()">確認画面へ</button>
   </div>
@@ -316,13 +304,10 @@
 </div>
 
 <script>
-// ===== GAS URL（このファイルをGitHub Pagesに置く場合は実際のURLに変更） =====
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbyF8gaA0hc4WyP3q2vIYe_4Xad8_DpvCJpodv2NJkEQbNLhubAh61jqFmkPbsV2GN1BxQ/exec';
 
-// ===== 画像圧縮設定 =====
-const COMPRESS_MAX_WIDTH  = 1200; // px
-const COMPRESS_MAX_HEIGHT = 1200; // px
-const COMPRESS_QUALITY    = 0.75; // JPEG品質
+const COMPRESS_MAX_SIDE = 1200; // 長辺px
+const COMPRESS_QUALITY  = 0.70; // JPEG品質
 
 let receiptBase64 = null;
 let receiptMime   = null;
@@ -349,110 +334,44 @@ function onChipClick(e) {
   if (!isOther) document.getElementById('input-category-other').value = '';
 }
 
-// ===== カメラ（getUserMedia方式） =====
-let cameraStream = null;
-let facingMode = 'environment'; // バックカメラ優先
-
-async function openCamera() {
-  // getUserMedia非対応ブラウザのフォールバック：ファイル選択
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
-    input.onchange = e => { if (e.target.files[0]) processImageFile(e.target.files[0]); };
-    input.click();
-    return;
-  }
-
-  try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: false,
-    });
-    const video = document.getElementById('camera-video');
-    video.srcObject = cameraStream;
-    const modal = document.getElementById('camera-modal');
-    modal.style.display = 'flex';
-  } catch (err) {
-    // 権限拒否やカメラなしはファイル選択にフォールバック
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*';
-    input.onchange = e => { if (e.target.files[0]) processImageFile(e.target.files[0]); };
-    input.click();
-  }
-}
-
-function closeCamera() {
-  stopStream();
-  document.getElementById('camera-modal').style.display = 'none';
-}
-
-function stopStream() {
-  if (cameraStream) {
-    cameraStream.getTracks().forEach(t => t.stop());
-    cameraStream = null;
-  }
-}
-
-async function switchCamera() {
-  facingMode = facingMode === 'environment' ? 'user' : 'environment';
-  stopStream();
-  try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facingMode }, audio: false,
-    });
-    document.getElementById('camera-video').srcObject = cameraStream;
-  } catch (err) {
-    facingMode = facingMode === 'environment' ? 'user' : 'environment'; // 戻す
-  }
-}
-
-function capturePhoto() {
-  const video  = document.getElementById('camera-video');
-  const canvas = document.getElementById('camera-canvas');
-
-  let w = video.videoWidth;
-  let h = video.videoHeight;
-  if (w > COMPRESS_MAX_WIDTH || h > COMPRESS_MAX_HEIGHT) {
-    const ratio = Math.min(COMPRESS_MAX_WIDTH / w, COMPRESS_MAX_HEIGHT / h);
-    w = Math.round(w * ratio);
-    h = Math.round(h * ratio);
-  }
-  canvas.width  = w;
-  canvas.height = h;
-  canvas.getContext('2d').drawImage(video, 0, 0, w, h);
-
-  const dataUrl = canvas.toDataURL('image/jpeg', COMPRESS_QUALITY);
-  receiptMime   = 'image/jpeg';
-  receiptBase64 = dataUrl.split(',')[1];
-
-  closeCamera();
-  showReceiptPreview(dataUrl);
-}
-
-function processImageFile(file) {
+// ===== 写真入力（input file方式） =====
+function handleReceiptInput(input) {
+  const file = input.files[0];
+  if (!file) return;
   showLoading('写真を圧縮中...');
-  const reader = new FileReader();
-  reader.onload = ev => {
+  compressImage(file, COMPRESS_MAX_SIDE, COMPRESS_QUALITY)
+    .then(base64 => {
+      receiptBase64 = base64;
+      receiptMime   = 'image/jpeg';
+      hideLoading();
+      showReceiptPreview('data:image/jpeg;base64,' + base64);
+    })
+    .catch(() => { hideLoading(); alert('画像の読み込みに失敗しました'); });
+}
+
+function compressImage(file, maxSide, quality) {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      let w = img.width; let h = img.height;
-      if (w > COMPRESS_MAX_WIDTH || h > COMPRESS_MAX_HEIGHT) {
-        const ratio = Math.min(COMPRESS_MAX_WIDTH / w, COMPRESS_MAX_HEIGHT / h);
-        w = Math.round(w * ratio); h = Math.round(h * ratio);
+      let { width, height } = img;
+      if (width > maxSide || height > maxSide) {
+        if (width > height) {
+          height = Math.round(height * maxSide / width);
+          width = maxSide;
+        } else {
+          width = Math.round(width * maxSide / height);
+          height = maxSide;
+        }
       }
       const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      const dataUrl = canvas.toDataURL('image/jpeg', COMPRESS_QUALITY);
-      receiptMime   = 'image/jpeg';
-      receiptBase64 = dataUrl.split(',')[1];
-      hideLoading();
-      showReceiptPreview(dataUrl);
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality).split(',')[1]);
     };
-    img.onerror = () => { hideLoading(); alert('画像の読み込みに失敗しました'); };
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 function showReceiptPreview(dataUrl) {
@@ -466,7 +385,7 @@ function showReceiptPreview(dataUrl) {
   clearError('fg-receipt','err-receipt');
 }
 
-function retakeReceipt() { openCamera(); }
+function retakeReceipt() { document.getElementById('receipt-input').click(); }
 
 // ===== バリデーション =====
 function validate() {
