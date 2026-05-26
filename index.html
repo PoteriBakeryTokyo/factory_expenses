@@ -103,6 +103,8 @@
   .receipt-hint { font-size: 13px; color: var(--color-text-secondary); opacity: 0.7; }
   .receipt-preview { max-width: 100%; max-height: 200px; border-radius: 8px; display: none; margin: 0 auto; }
   .receipt-preview.show { display: block; }
+  .receipt-pdf { width: 100%; height: 200px; border: none; border-radius: 8px; display: none; }
+  .receipt-pdf.show { display: block; }
   .receipt-actions { display: flex; gap: 10px; justify-content: center; margin: 8px 0 4px; }
   .receipt-action-btn {
     flex: 1; padding: 9px 8px; border-radius: 980px;
@@ -270,6 +272,7 @@
           </div>
           <div class="receipt-hint">（必須）</div>
           <img class="receipt-preview" id="receipt-preview" alt="レシートプレビュー">
+          <iframe class="receipt-pdf" id="receipt-pdf-preview" title="PDFプレビュー"></iframe>
         </div>
         <input type="file" id="receipt-camera" accept="image/*" capture="environment" style="display:none;" onchange="handleReceiptInput(this)">
         <input type="file" id="receipt-file" accept="image/*,application/pdf" style="display:none;" onchange="handleReceiptInput(this)">
@@ -294,7 +297,7 @@
         <div class="confirm-row"><div class="confirm-key">内容</div><div class="confirm-val" id="cv-category"></div></div>
         <div class="confirm-row"><div class="confirm-key">支払方法</div><div class="confirm-val" id="cv-payment"></div></div>
         <div class="confirm-row"><div class="confirm-key">税込金額</div><div class="confirm-val amount" id="cv-amount"></div></div>
-        <div class="confirm-row"><div class="confirm-key">レシート</div><div class="confirm-val"><img class="receipt-thumb" id="cv-receipt-img" alt="レシート"></div></div>
+        <div class="confirm-row"><div class="confirm-key">レシート</div><div class="confirm-val"><img class="receipt-thumb" id="cv-receipt-img" alt="レシート"><iframe class="receipt-pdf" id="cv-receipt-pdf" title="PDFプレビュー" style="height:160px;"></iframe></div></div>
       </div>
     </div>
     <button class="btn-primary" onclick="submitForm()">送信する</button>
@@ -323,8 +326,9 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbyF8gaA0hc4WyP3q2vIYe_4
 const COMPRESS_MAX_SIDE = 1200; // 長辺px
 const COMPRESS_QUALITY  = 0.70; // JPEG品質
 
-let receiptBase64 = null;
-let receiptMime   = null;
+let receiptBase64   = null;
+let receiptMime     = null;
+let receiptBlobUrl  = null;
 let selectedCategory = null;
 
 // ===== 初期化 =====
@@ -354,6 +358,8 @@ function handleReceiptInput(input) {
   if (!file) return;
   if (file.type === 'application/pdf') {
     showLoading('ファイルを読み込み中...');
+    if (receiptBlobUrl) { URL.revokeObjectURL(receiptBlobUrl); }
+    receiptBlobUrl = URL.createObjectURL(file);
     const reader = new FileReader();
     reader.onload = e => {
       receiptBase64 = e.target.result.split(',')[1];
@@ -406,10 +412,11 @@ function showReceiptPreview(dataUrl) {
   if (dataUrl) {
     preview.src = dataUrl;
     preview.classList.add('show');
-    document.getElementById('receipt-icon').style.display = 'none';
   } else {
-    document.getElementById('receipt-icon').textContent = '📄';
+    document.getElementById('receipt-pdf-preview').src = receiptBlobUrl;
+    document.getElementById('receipt-pdf-preview').classList.add('show');
   }
+  document.getElementById('receipt-icon').style.display = 'none';
   document.getElementById('receipt-actions').style.display = 'none';
   document.getElementById('receipt-area').classList.add('has-photo');
   document.getElementById('receipt-retake-wrap').classList.add('show');
@@ -456,12 +463,15 @@ function goToConfirm() {
   document.getElementById('cv-payment').textContent  = document.getElementById('input-payment').value;
   document.getElementById('cv-amount').textContent   = '¥' + Number(document.getElementById('input-amount').value).toLocaleString();
   const cvImg = document.getElementById('cv-receipt-img');
+  const cvPdf = document.getElementById('cv-receipt-pdf');
   if (receiptMime === 'application/pdf') {
     cvImg.style.display = 'none';
-    cvImg.alt = 'PDFファイル';
+    cvPdf.src = receiptBlobUrl;
+    cvPdf.classList.add('show');
   } else {
     cvImg.style.display = '';
     cvImg.src = 'data:image/jpeg;base64,' + receiptBase64;
+    cvPdf.classList.remove('show');
   }
 
   showPage('page-confirm');
@@ -515,6 +525,11 @@ function resetForm() {
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
   document.getElementById('receipt-preview').classList.remove('show');
   document.getElementById('receipt-preview').src = '';
+  document.getElementById('receipt-pdf-preview').classList.remove('show');
+  document.getElementById('receipt-pdf-preview').src = '';
+  document.getElementById('cv-receipt-pdf').classList.remove('show');
+  document.getElementById('cv-receipt-pdf').src = '';
+  if (receiptBlobUrl) { URL.revokeObjectURL(receiptBlobUrl); receiptBlobUrl = null; }
   document.getElementById('receipt-icon').textContent = '🖼️';
   document.getElementById('receipt-icon').style.display = '';
   document.getElementById('receipt-actions').style.display = '';
