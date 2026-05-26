@@ -103,9 +103,16 @@
   .receipt-hint { font-size: 13px; color: var(--color-text-secondary); opacity: 0.7; }
   .receipt-preview { max-width: 100%; max-height: 200px; border-radius: 8px; display: none; margin: 0 auto; }
   .receipt-preview.show { display: block; }
-  .receipt-retake { display: none; margin-top: 10px; font-size: 14px; color: var(--color-blue); cursor: pointer; }
-  .receipt-retake.show { display: inline; }
-  .receipt-area { cursor: pointer; }
+  .receipt-actions { display: flex; gap: 10px; justify-content: center; margin: 8px 0 4px; }
+  .receipt-action-btn {
+    flex: 1; padding: 9px 8px; border-radius: 980px;
+    border: 1.5px solid var(--color-blue); background: #fff;
+    font-family: var(--font-text); font-size: 14px; color: var(--color-blue);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .receipt-action-btn:hover { background: rgba(0,113,227,0.06); }
+  .receipt-retake-wrap { display: none; margin-top: 10px; gap: 12px; justify-content: center; }
+  .receipt-retake-wrap.show { display: flex; }
 
   .error-msg { font-size: 13px; color: var(--color-error); margin-top: 6px; display: none; }
   .error-msg.show { display: block; }
@@ -255,14 +262,21 @@
       <div class="form-group" id="fg-receipt">
         <label>レシート写真</label>
 
-        <div class="receipt-area" id="receipt-area" onclick="document.getElementById('receipt-input').click()">
+        <div class="receipt-area" id="receipt-area">
           <span class="receipt-icon" id="receipt-icon">🖼️</span>
-          <div class="receipt-label" id="receipt-label">タップして選択</div>
-          <div class="receipt-hint">カメラ撮影またはファイルから選択（必須）</div>
+          <div class="receipt-actions" id="receipt-actions">
+            <button type="button" class="receipt-action-btn" onclick="document.getElementById('receipt-camera').click()">📷 カメラで撮影</button>
+            <button type="button" class="receipt-action-btn" onclick="document.getElementById('receipt-file').click()">📁 ファイルから選ぶ</button>
+          </div>
+          <div class="receipt-hint">（必須）</div>
           <img class="receipt-preview" id="receipt-preview" alt="レシートプレビュー">
         </div>
-        <input type="file" id="receipt-input" accept="image/*" style="display:none;" onchange="handleReceiptInput(this)">
-        <span class="receipt-retake" id="receipt-retake" onclick="document.getElementById('receipt-input').click()">🖼️ 選び直す</span>
+        <input type="file" id="receipt-camera" accept="image/*" capture="environment" style="display:none;" onchange="handleReceiptInput(this)">
+        <input type="file" id="receipt-file" accept="image/*,application/pdf" style="display:none;" onchange="handleReceiptInput(this)">
+        <div class="receipt-retake-wrap" id="receipt-retake-wrap">
+          <button type="button" class="receipt-action-btn" onclick="document.getElementById('receipt-camera').click()">📷 撮り直す</button>
+          <button type="button" class="receipt-action-btn" onclick="document.getElementById('receipt-file').click()">📁 選び直す</button>
+        </div>
         <div class="error-msg" id="err-receipt">レシート写真を選択してください</div>
       </div>
     </div>
@@ -338,15 +352,28 @@ function onChipClick(e) {
 function handleReceiptInput(input) {
   const file = input.files[0];
   if (!file) return;
-  showLoading('写真を圧縮中...');
-  compressImage(file, COMPRESS_MAX_SIDE, COMPRESS_QUALITY)
-    .then(base64 => {
-      receiptBase64 = base64;
-      receiptMime   = 'image/jpeg';
+  if (file.type === 'application/pdf') {
+    showLoading('ファイルを読み込み中...');
+    const reader = new FileReader();
+    reader.onload = e => {
+      receiptBase64 = e.target.result.split(',')[1];
+      receiptMime   = 'application/pdf';
       hideLoading();
-      showReceiptPreview('data:image/jpeg;base64,' + base64);
-    })
-    .catch(() => { hideLoading(); alert('画像の読み込みに失敗しました'); });
+      showReceiptPreview(null);
+    };
+    reader.onerror = () => { hideLoading(); alert('ファイルの読み込みに失敗しました'); };
+    reader.readAsDataURL(file);
+  } else {
+    showLoading('写真を圧縮中...');
+    compressImage(file, COMPRESS_MAX_SIDE, COMPRESS_QUALITY)
+      .then(base64 => {
+        receiptBase64 = base64;
+        receiptMime   = 'image/jpeg';
+        hideLoading();
+        showReceiptPreview('data:image/jpeg;base64,' + base64);
+      })
+      .catch(() => { hideLoading(); alert('画像の読み込みに失敗しました'); });
+  }
 }
 
 function compressImage(file, maxSide, quality) {
@@ -376,16 +403,18 @@ function compressImage(file, maxSide, quality) {
 
 function showReceiptPreview(dataUrl) {
   const preview = document.getElementById('receipt-preview');
-  preview.src = dataUrl;
-  preview.classList.add('show');
-  document.getElementById('receipt-icon').style.display  = 'none';
-  document.getElementById('receipt-label').style.display = 'none';
+  if (dataUrl) {
+    preview.src = dataUrl;
+    preview.classList.add('show');
+    document.getElementById('receipt-icon').style.display = 'none';
+  } else {
+    document.getElementById('receipt-icon').textContent = '📄';
+  }
+  document.getElementById('receipt-actions').style.display = 'none';
   document.getElementById('receipt-area').classList.add('has-photo');
-  document.getElementById('receipt-retake').classList.add('show');
+  document.getElementById('receipt-retake-wrap').classList.add('show');
   clearError('fg-receipt','err-receipt');
 }
-
-function retakeReceipt() { document.getElementById('receipt-input').click(); }
 
 // ===== バリデーション =====
 function validate() {
@@ -426,7 +455,14 @@ function goToConfirm() {
   document.getElementById('cv-category').textContent = catVal;
   document.getElementById('cv-payment').textContent  = document.getElementById('input-payment').value;
   document.getElementById('cv-amount').textContent   = '¥' + Number(document.getElementById('input-amount').value).toLocaleString();
-  document.getElementById('cv-receipt-img').src      = 'data:image/jpeg;base64,' + receiptBase64;
+  const cvImg = document.getElementById('cv-receipt-img');
+  if (receiptMime === 'application/pdf') {
+    cvImg.style.display = 'none';
+    cvImg.alt = 'PDFファイル';
+  } else {
+    cvImg.style.display = '';
+    cvImg.src = 'data:image/jpeg;base64,' + receiptBase64;
+  }
 
   showPage('page-confirm');
   updateSteps(2);
@@ -479,10 +515,12 @@ function resetForm() {
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
   document.getElementById('receipt-preview').classList.remove('show');
   document.getElementById('receipt-preview').src = '';
-  document.getElementById('receipt-icon').style.display  = '';
-  document.getElementById('receipt-label').style.display = '';
+  document.getElementById('receipt-icon').textContent = '🖼️';
+  document.getElementById('receipt-icon').style.display = '';
+  document.getElementById('receipt-actions').style.display = '';
   document.getElementById('receipt-area').classList.remove('has-photo');
-  document.getElementById('receipt-retake').classList.remove('show');
+  document.getElementById('receipt-retake-wrap').classList.remove('show');
+  document.getElementById('cv-receipt-img').style.display = '';
 
   const today = new Date();
   document.getElementById('input-date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
