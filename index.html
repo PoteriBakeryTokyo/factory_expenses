@@ -256,14 +256,14 @@
         <label>レシート写真</label>
 
         <div class="receipt-area" id="receipt-area" onclick="document.getElementById('receipt-input').click()">
-          <span class="receipt-icon" id="receipt-icon">📷</span>
-          <div class="receipt-label" id="receipt-label">タップして撮影</div>
-          <div class="receipt-hint">カメラが起動します（必須）</div>
+          <span class="receipt-icon" id="receipt-icon">🖼️</span>
+          <div class="receipt-label" id="receipt-label">タップして選択</div>
+          <div class="receipt-hint">カメラ撮影またはファイルから選択（必須）</div>
           <img class="receipt-preview" id="receipt-preview" alt="レシートプレビュー">
         </div>
-        <input type="file" id="receipt-input" accept="image/*" capture="environment" style="display:none;" onchange="handleReceiptInput(this)">
-        <span class="receipt-retake" id="receipt-retake" onclick="document.getElementById('receipt-input').click()">📷 撮り直す</span>
-        <div class="error-msg" id="err-receipt">レシート写真を撮影してください</div>
+        <input type="file" id="receipt-input" accept="image/*" style="display:none;" onchange="handleReceiptInput(this)">
+        <span class="receipt-retake" id="receipt-retake" onclick="document.getElementById('receipt-input').click()">🖼️ 選び直す</span>
+        <div class="error-msg" id="err-receipt">レシート写真を選択してください</div>
       </div>
     </div>
 
