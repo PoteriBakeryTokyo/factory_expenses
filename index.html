@@ -103,8 +103,11 @@
   .receipt-hint { font-size: 13px; color: var(--color-text-secondary); opacity: 0.7; }
   .receipt-preview { max-width: 100%; max-height: 200px; border-radius: 8px; display: none; margin: 0 auto; }
   .receipt-preview.show { display: block; }
-  .receipt-pdf { width: 100%; height: 200px; border: none; border-radius: 8px; display: none; }
-  .receipt-pdf.show { display: block; }
+  .receipt-pdf-card { display: none; padding: 20px 16px; text-align: center; }
+  .receipt-pdf-card.show { display: block; }
+  .receipt-pdf-card .pdf-icon { font-size: 40px; display: block; margin-bottom: 8px; }
+  .receipt-pdf-card .pdf-name { font-size: 14px; font-weight: 500; word-break: break-all; margin-bottom: 4px; }
+  .receipt-pdf-card .pdf-size { font-size: 13px; color: var(--color-text-secondary); }
   .receipt-actions { display: flex; gap: 10px; justify-content: center; margin: 8px 0 4px; }
   .receipt-action-btn {
     flex: 1; padding: 9px 8px; border-radius: 980px;
@@ -272,7 +275,11 @@
           </div>
           <div class="receipt-hint">（必須）</div>
           <img class="receipt-preview" id="receipt-preview" alt="レシートプレビュー">
-          <iframe class="receipt-pdf" id="receipt-pdf-preview" title="PDFプレビュー"></iframe>
+          <div class="receipt-pdf-card" id="receipt-pdf-card">
+            <span class="pdf-icon">📄</span>
+            <div class="pdf-name" id="receipt-pdf-name"></div>
+            <div class="pdf-size" id="receipt-pdf-size"></div>
+          </div>
         </div>
         <input type="file" id="receipt-camera" accept="image/*" capture="environment" style="display:none;" onchange="handleReceiptInput(this)">
         <input type="file" id="receipt-file" accept="image/*,application/pdf" style="display:none;" onchange="handleReceiptInput(this)">
@@ -297,7 +304,7 @@
         <div class="confirm-row"><div class="confirm-key">内容</div><div class="confirm-val" id="cv-category"></div></div>
         <div class="confirm-row"><div class="confirm-key">支払方法</div><div class="confirm-val" id="cv-payment"></div></div>
         <div class="confirm-row"><div class="confirm-key">税込金額</div><div class="confirm-val amount" id="cv-amount"></div></div>
-        <div class="confirm-row"><div class="confirm-key">レシート</div><div class="confirm-val"><img class="receipt-thumb" id="cv-receipt-img" alt="レシート"><iframe class="receipt-pdf" id="cv-receipt-pdf" title="PDFプレビュー" style="height:160px;"></iframe></div></div>
+        <div class="confirm-row"><div class="confirm-key">レシート</div><div class="confirm-val"><img class="receipt-thumb" id="cv-receipt-img" alt="レシート"><div class="receipt-pdf-card" id="cv-receipt-pdf" style="padding:12px 0;"><span class="pdf-icon">📄</span><div class="pdf-name" id="cv-receipt-pdf-name"></div><div class="pdf-size" id="cv-receipt-pdf-size"></div></div></div></div>
       </div>
     </div>
     <button class="btn-primary" onclick="submitForm()">送信する</button>
@@ -358,14 +365,17 @@ function handleReceiptInput(input) {
   if (!file) return;
   if (file.type === 'application/pdf') {
     showLoading('ファイルを読み込み中...');
-    if (receiptBlobUrl) { URL.revokeObjectURL(receiptBlobUrl); }
-    receiptBlobUrl = URL.createObjectURL(file);
+    if (receiptBlobUrl) { URL.revokeObjectURL(receiptBlobUrl); receiptBlobUrl = null; }
+    const pdfName = file.name;
+    const pdfSize = file.size < 1024 * 1024
+      ? Math.round(file.size / 1024) + ' KB'
+      : (file.size / (1024 * 1024)).toFixed(1) + ' MB';
     const reader = new FileReader();
     reader.onload = e => {
       receiptBase64 = e.target.result.split(',')[1];
       receiptMime   = 'application/pdf';
       hideLoading();
-      showReceiptPreview(null);
+      showReceiptPreview(null, pdfName, pdfSize);
     };
     reader.onerror = () => { hideLoading(); alert('ファイルの読み込みに失敗しました'); };
     reader.readAsDataURL(file);
@@ -407,14 +417,15 @@ function compressImage(file, maxSide, quality) {
   });
 }
 
-function showReceiptPreview(dataUrl) {
-  const preview = document.getElementById('receipt-preview');
+function showReceiptPreview(dataUrl, pdfName, pdfSize) {
   if (dataUrl) {
+    const preview = document.getElementById('receipt-preview');
     preview.src = dataUrl;
     preview.classList.add('show');
   } else {
-    document.getElementById('receipt-pdf-preview').src = receiptBlobUrl;
-    document.getElementById('receipt-pdf-preview').classList.add('show');
+    document.getElementById('receipt-pdf-name').textContent = pdfName;
+    document.getElementById('receipt-pdf-size').textContent = pdfSize;
+    document.getElementById('receipt-pdf-card').classList.add('show');
   }
   document.getElementById('receipt-icon').style.display = 'none';
   document.getElementById('receipt-actions').style.display = 'none';
@@ -466,7 +477,8 @@ function goToConfirm() {
   const cvPdf = document.getElementById('cv-receipt-pdf');
   if (receiptMime === 'application/pdf') {
     cvImg.style.display = 'none';
-    cvPdf.src = receiptBlobUrl;
+    document.getElementById('cv-receipt-pdf-name').textContent = document.getElementById('receipt-pdf-name').textContent;
+    document.getElementById('cv-receipt-pdf-size').textContent = document.getElementById('receipt-pdf-size').textContent;
     cvPdf.classList.add('show');
   } else {
     cvImg.style.display = '';
@@ -525,10 +537,8 @@ function resetForm() {
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
   document.getElementById('receipt-preview').classList.remove('show');
   document.getElementById('receipt-preview').src = '';
-  document.getElementById('receipt-pdf-preview').classList.remove('show');
-  document.getElementById('receipt-pdf-preview').src = '';
+  document.getElementById('receipt-pdf-card').classList.remove('show');
   document.getElementById('cv-receipt-pdf').classList.remove('show');
-  document.getElementById('cv-receipt-pdf').src = '';
   if (receiptBlobUrl) { URL.revokeObjectURL(receiptBlobUrl); receiptBlobUrl = null; }
   document.getElementById('receipt-icon').textContent = '🖼️';
   document.getElementById('receipt-icon').style.display = '';
